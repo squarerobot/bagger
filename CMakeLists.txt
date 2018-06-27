@@ -11,7 +11,6 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   roslint
-  rostest
   message_generation
 )
 
@@ -104,6 +103,7 @@ install(DIRECTORY include/${PROJECT_NAME}/
 ## Testing ##
 #############
 
-add_rostest(
-  test/test_bagger_node.test
-)
+if(CATKIN_ENABLE_TESTING)
+  find_package(rostest REQUIRED)
+  add_rostest(test/test_bagger_node.test)
+endif()
