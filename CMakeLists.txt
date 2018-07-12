@@ -48,7 +48,7 @@ generate_messages(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS message_runtime
+  CATKIN_DEPENDS message_runtime std_msgs
 )
 
 ###########
@@ -64,6 +64,9 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(bagger src/bagger.cpp)
+
+## Add generated messages as a dependency of the bagger executable
+add_dependencies(bagger bagger_generate_messages_cpp)
 
 target_link_libraries(bagger
   ${catkin_LIBRARIES}

@@ -5,8 +5,10 @@
   <description>An application used to systematically record rosbags</description>
   <license>BSD</license>
 
-  <maintainer email="maintainer@squarerobots.com">Maintainer</maintainer>
-  <url type="website">http://squarerobots.com</url>
+  <maintainer email="bgibbons@squarerobots.com">Brenden Gibbons</maintainer>
+  <url type="website">http://www.ros.org/wiki/bagger</url>
+  <url type="repository">https://github.com/squarerobot/bagger</url>
+  <url type="bugtracker">https://github.com/squarerobot/bagger/issues</url>
   <author email="bgibbons@squarerobots.com">Brenden Gibbons</author>
 
   <buildtool_depend>catkin</buildtool_depend>
