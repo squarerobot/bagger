@@ -2,8 +2,8 @@
 Changelog for package bagger
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.2 (2018-07-12)
+------------------
 * Fix some urls and Fix `#1 <https://github.com/squarerobot/bagger/issues/1>`_
 * Contributors: Brenden Gibbons
 
