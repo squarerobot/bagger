@@ -15,8 +15,8 @@ reindex_remove_orig() {
   mv "$BAG_NAME_REINDEXED" "$BAG_NAME_NO_EXTENSION.bag"
 }
 
-# Helper function for determining if a passed rosbag file is compressed, then uncompressing it if so.
-#  The old compressed file is then deleted
+# Helper function for determining if a passed rosbag file is compressed, then
+# uncompressing it if so.The old compressed file is then deleted
 decompress_remove_orig() {
   ROSBAG_INFO_OUT=$(rosbag info "$1") 
   ROSBAG_INFO_OUT_NO_SPACES=$(echo "$ROSBAG_INFO_OUT" | sed -e 's/ //g')
@@ -39,33 +39,56 @@ main() {
   for FILE_NAME in "$1"/*
   do
     echo "$FILE_NAME"
-    if [[ "$FILE_NAME" = *"bag.active" ]]; then
-      reindex_remove_orig "$FILE_NAME"
-      REINDEXED_FILE_NAME=$(echo "$FILE_NAME" | sed -e 's/\.active//g')
-      decompress_remove_orig "$REINDEXED_FILE_NAME"
-    elif [[ "$FILE_NAME" = *"bag" ]]; then
-      decompress_remove_orig "$FILE_NAME" 
+    if [[ "$FILE_NAME" = *".bag"* ]]; then
+      REINDEXED_FILE_NAME="$FILE_NAME" 
+      if [[ "$FILE_NAME" = *"bag.active" ]]; then
+        reindex_remove_orig "$FILE_NAME"
+        REINDEXED_FILE_NAME=$(echo "$FILE_NAME" | sed -e 's/\.active//g')
+      fi
+      if [[ $2 = false ]]; then
+        decompress_remove_orig "$REINDEXED_FILE_NAME"
+      fi
     else
       echo "Not touching $FILE_NAME - not a rosbag"
     fi
   done
 }
 
-if [ "$1" == "-h" ] ; then
+if [ "$1" == "-h" ] || [ "$1" == "--help" ] || (($# == 0)) ; then
 cat <<EOF
-  This script will iterate through all of the rosbags contained in a passed directory, 
-  first reindexing any that haven't been closed properly, then decompressing any that
-  are compressed.  After the decompression and reindexing steps, the names will be 
-  <name>.bag, and free from any .active tyrany.  Be advised that the old .active and
-  compressed bags will be deleted automatically after this script has created a new
-  indexed and decompressed version of the bag.
+  This script will iterate through all of the rosbags contained in a passed
+  directory, first reindexing any that haven't been closed properly, then
+  optionally decompressing any that are compressed.  After the decompression
+  and reindexing steps, the names will be <name>.bag, and free from any .active
+  tyrany.  Be advised that the old .active and compressed bags will be deleted
+  automatically after this script has created a new indexed and decompressed
+  version of the bag.
   
-  Usage: $0 [options]
-  -h| --help           Summon this help message
-  -1| --first-option   The directory containing bags to be reindexed and decompressed
+  Usage: bag_cleanup.bash [options] -d <bag_directory>
+  -h | --help | Summon this help message
+  -n | If passed, bags will not be decompressed, only reindexed
+  -d | The directory containing bags for reindex and optional decompression
 EOF
   exit 0
 fi
 
+NO_DECOMPRESS=false
 
-main "$1"
+while getopts ":d:n" opt; do
+  case $opt in
+    d)
+      DIRNAME=$OPTARG
+      ;;
+    n)
+      NO_DECOMPRESS=true
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      ;;
+  esac
+done
+
+main "$DIRNAME" $NO_DECOMPRESS
