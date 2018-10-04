@@ -41,13 +41,17 @@ class TestBaggerNode(unittest.TestCase):
         set_bagging_state_srv = rospy.ServiceProxy('/bagger/set_bag_state', SetBagState)
         
         # Sleep a little and assert that both bag profiles are in the off state
-        time.sleep(0.5)
+        rospy.sleep(0.5)
         self.assertEquals(bagging_state_cb.bag_names_states["everything"], False)
         self.assertEquals(bagging_state_cb.bag_names_states["nav"], False)
 
         # Set bag states to false - reset state
         self.assertTrue(set_bagging_state_srv("everything", False))
         self.assertTrue(set_bagging_state_srv("nav", False))
+        
+        # Sleep to make sure any bag state msgs from the last set_bagging state are published
+        # before the next test is run
+        rospy.sleep(0.5)
         
     def test_basic_set_bag_states(self):
         """Test turning on/off a couple of bags and seeing that their status is updated correctly"""
@@ -59,14 +63,14 @@ class TestBaggerNode(unittest.TestCase):
         bagging_state_cb = BagStateCallback()
         rospy.Subscriber('/bagger/bag_states', BaggingState, bagging_state_cb)
         
-        time.sleep(0.5)
+        rospy.sleep(0.5)
 
         # Turn on the everything bag and the navigation bag
         self.assertTrue(set_bagging_state_srv("everything", True).success)
         self.assertTrue(set_bagging_state_srv("nav", True).success)
         
         # Wait a bit to make sure the status is updated
-        time.sleep(0.5)
+        rospy.sleep(0.5)
         self.assertEquals(bagging_state_cb.bag_names_states["everything"], True)
         self.assertEquals(bagging_state_cb.bag_names_states["nav"], True)
         self.assertEquals(bagging_state_cb.received_msgs, 3)
@@ -76,13 +80,17 @@ class TestBaggerNode(unittest.TestCase):
         self.assertFalse(set_bagging_state_srv("nav", True).success)
 
         # Wait a bit to make sure the status is updated
-        time.sleep(1.0)
+        rospy.sleep(1.0)
         self.assertEquals(bagging_state_cb.bag_names_states["everything"], True)
         self.assertEquals(bagging_state_cb.bag_names_states["nav"], True)
 
         # Set bag states to false - reset state
         self.assertTrue(set_bagging_state_srv("everything", False))
         self.assertTrue(set_bagging_state_srv("nav", False))
+        
+        # Sleep to make sure any bag state msgs from the last set_bagging state are published
+        # before the next test is run
+        rospy.sleep(0.5)
         
     def test_absent_set_bag_state(self):
         """Test attempting to turn on a non-existant bag profile"""
@@ -96,6 +104,10 @@ class TestBaggerNode(unittest.TestCase):
         # Set bag states to false - reset state
         self.assertTrue(set_bagging_state_srv("everything", False))
         self.assertTrue(set_bagging_state_srv("nav", False))
+        
+        # Sleep to make sure any bag state msgs from the last set_bagging state are published
+        # before the next test is run
+        rospy.sleep(0.5)
         
     @unittest.skip("Something is wrong with spawning the rosbag processes in Docker") 
     def test_bag_creation_and_bagging(self):
@@ -160,6 +172,10 @@ class TestBaggerNode(unittest.TestCase):
         # Set bag states to false - reset state
         self.assertTrue(set_bagging_state_srv("everything", False))
         self.assertTrue(set_bagging_state_srv("nav", False))
+        
+        # Sleep to make sure any bag state msgs from the last set_bagging state are published
+        # before the next test is run
+        rospy.sleep(0.5)
         
 
 if __name__ == '__main__':
