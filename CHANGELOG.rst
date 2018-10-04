@@ -2,6 +2,12 @@
 Changelog for package bagger
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Infer and publish bag names and directories for each bag profile
+* Add CL option to not decompress bags.  Fixes `#4 <https://github.com/squarerobot/bagger/issues/4>`_
+* Contributors: Brenden Gibbons
+
 0.1.2 (2018-07-12)
 ------------------
 * Fix some urls and Fix `#1 <https://github.com/squarerobot/bagger/issues/1>`_
