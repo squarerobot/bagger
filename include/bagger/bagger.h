@@ -46,10 +46,11 @@
 #ifndef SRC_BAGGER_INCLUDE_BAGGER_BAGGER_H_
 #define SRC_BAGGER_INCLUDE_BAGGER_BAGGER_H_
 
+#include <ros/ros.h>
+#include <boost/filesystem.hpp>
 #include <map>
 #include <string>
 #include <vector>
-#include <ros/ros.h>
 
 #include <bagger/BaggingState.h>
 #include <bagger/SetBagState.h>
@@ -102,6 +103,17 @@ private:
 
   /// Convenience function for publishing the recording states for each record profile
   void publishBaggingStates();
+
+  /// Utility function which returns the current working directory of the executing program
+  std::string getCurrentWorkingDirectory();
+  /// Searches the passed directory for any file paths that contain the passed match string.  Returns a vector
+  /// of paths containing all such matches
+  std::vector<boost::filesystem::path> getMatchingFilePathsInDirectory(const boost::filesystem::path &dir_path,
+                                                                       std::string match_string);
+  /// Utility function which infers the most likely rosbag name for the passed record options
+  std::string getBagNameFromRecordOptions(std::string record_opts);
+  /// Returns a version of the passed string with the passed suffix removed
+  std::string removeSuffix(std::string s, std::string suffix);
 
   std::map<std::string, std::string> profile_name_to_record_options_map_;
   std::map<std::string, RecordProcess> profile_name_to_record_process_map_;
