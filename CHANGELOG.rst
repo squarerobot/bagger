@@ -2,6 +2,14 @@
 Changelog for package bagger
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.1.4 (2021-04-26)
+-----------
+* Proper waiting for record processing. Fixes `#6 <https://github.com/squarerobot/bagger/issues/6>`_
+* Fix test timing synchronisity issue.
+  Tests were beginning before the last test's latest bag_states message
+  was published.
+* Contributors: Brenden Gibbons
+
 0.1.3 (2018-10-04)
 ------------------
 * Infer and publish bag names and directories for each bag profile
