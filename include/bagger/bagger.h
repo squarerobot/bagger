@@ -106,8 +106,8 @@ private:
 
   /// Utility function which returns the current working directory of the executing program
   std::string getCurrentWorkingDirectory();
-  /// Searches the passed directory for any file paths that contain the passed match string.  Returns a vector
-  /// of paths containing all such matches
+  /// Searches the passed directory for any file paths that contain the passed
+  /// match string.  Returns a vector of paths containing all such matches
   std::vector<boost::filesystem::path> getMatchingFilePathsInDirectory(const boost::filesystem::path &dir_path,
                                                                        std::string match_string);
   /// Utility function which infers the most likely rosbag name for the passed record options
@@ -120,6 +120,7 @@ private:
 
 public:
   Bagger();
+  void attemptRecordCleanup();
 };
 
 #endif /* SRC_BAGGER_INCLUDE_BAGGER_BAGGER_H_ */

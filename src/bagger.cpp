@@ -117,8 +117,7 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
         // Start recording
         pid_t pid_rr = fork();
         if (pid_rr == 0) {
-          // Child process - successful fork
-          // pass the vector's internal array to execvp
+          // Child process - successful fork - pass the vector's internal array to execvp
           std::vector<std::string> command_strings =
               profile_name_to_record_process_map_[request.bag_profile_name].getRecordOptionsVector();
           std::vector<char *> commands;
@@ -177,7 +176,8 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
     }
   } else {
     // The requested profile does not exist
-    ROS_ERROR("Requested record profile: %s does not exist. Check the configured profile names",
+    ROS_ERROR("Requested record profile: %s does not exist. Check the configured "
+              "profile names",
               request.bag_profile_name.c_str());
   }
 
@@ -196,8 +196,8 @@ void Bagger::publishBaggingStates() {
   // Sleep for a quarter second to make sure the new bag exists
   ros::Duration(0.25).sleep();
 
-  // First, fill out the profile names and whether or not each one has an active rosbag recording
-  // Second, for active profiles fill out the currently recording bag path and name
+  // First, fill out the profile names and whether or not each one has an active rosbag recording Second, for active
+  // profiles fill out the currently recording bag path and name
   for (auto it = profile_name_to_record_process_map_.begin(); it != profile_name_to_record_process_map_.end(); ++it) {
     bs_msg.bag_profile_names.push_back(it->first);
     bs_msg.bagging.push_back(it->second.getRecording());
@@ -217,9 +217,9 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
   std::string cwd_string = getCurrentWorkingDirectory();
 
   if (record_opts.find("-o") != std::string::npos) {
-    // -o is the prefix argument.  It means that rosbag record will record bags beginning with the passed
-    // prefix and ending with the date time, followed by .bag.  If no directory exists in the passed prefix,
-    // The bag will be recorded in the current working directory.
+    // -o is the prefix argument.  It means that rosbag record will record bags beginning with the passed prefix and
+    // ending with the date time, followed by .bag.  If no directory exists in the passed prefix, The bag will be
+    // recorded in the current working directory.
 
     // Get the passed -o argument.
     size_t start_index = record_opts.find("-o ") + 3;
@@ -254,10 +254,10 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
       bag_name = latest.string();
     }
   } else if (record_opts.find("-O") != std::string::npos) {
-    // The -O argument means that the bag's name is specified.  If the passed name does not
-    // end in .bag, .bag is appended.  If multiple bags are recorded with the same name,
-    // when rosbag record stops, it will append the .active bag to the existing .bag file.  If no
-    // directory is passed as part of the name, the bag will be recorded in the current working dir
+    // The -O argument means that the bag's name is specified.  If the passed name does not end in .bag, .bag is
+    // appended.  If multiple bags are recorded with the same name, when rosbag record stops, it will append the .active
+    // bag to the existing .bag file.  If no directory is passed as part of the name, the bag will be recorded in the
+    // current working dir
 
     size_t start_index = record_opts.find("-O ") + 3;
     size_t next_space_index = record_opts.find(" ", start_index);
@@ -275,8 +275,8 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
     bag_name = file_path;
 
   } else {
-    // if nothing is passed, a dated rosbag will be created in the cwd.  Find the most recent rosbag in the cwd
-    // without a prefix
+    // if nothing is passed, a dated rosbag will be created in the cwd. Find the most recent rosbag in the cwd without a
+    // prefix
     const boost::filesystem::path cwd_path(cwd_string);
     std::vector<boost::filesystem::path> bag_matches = getMatchingFilePathsInDirectory(cwd_path, ".bag.active");
 
@@ -303,6 +303,14 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
       }
 
       bag_name = latest.string();
+    }
+  }
+
+  // If the --split flag was specified, remove the tailing '_N'
+  if (record_opts.find("--split") != std::string::npos) {
+    auto last_underscore_index = bag_name.rfind('_');
+    if (last_underscore_index != std::string::npos) {
+      bag_name.erase(last_underscore_index);
     }
   }
 
@@ -338,6 +346,19 @@ std::string Bagger::getCurrentWorkingDirectory() {
   return std::string(path) + "/";
 }
 
+void Bagger::attemptRecordCleanup() {
+  for (auto &pn_pair : profile_name_to_record_process_map_) {
+    int status;
+    pid_t wait_result = waitpid(pn_pair.second.getRecordPID(), &status, WNOHANG);
+    if (wait_result > 0) {
+      ROS_DEBUG_STREAM("Record for profile " << pn_pair.first << " has completed");
+      // In case the record process died without bagger killing it, ensure that bagger updates properly
+      pn_pair.second.setRecording(false);
+      publishBaggingStates();
+    }
+  }
+}
+
 Bagger::Bagger() {
   node_handle_ = ros::NodeHandlePtr(new ros::NodeHandle("bagger"));
 
@@ -352,7 +373,8 @@ Bagger::Bagger() {
   if (private_node_handle_->hasParam("profile_name_to_record_options_map")) {
     private_node_handle_->getParam("profile_name_to_record_options_map", profile_name_to_record_options_map_);
   } else {
-    ROS_ERROR("Failed to find profile_name_to_bag_options_map in param server - using default");
+    ROS_ERROR("Failed to find profile_name_to_bag_options_map in param server - "
+              "using default");
     profile_name_to_record_options_map_["everything"] = "-a -O /tmp/everything.bag";
   }
 
@@ -364,9 +386,14 @@ Bagger::Bagger() {
 
   publishBaggingStates();
 }
-
 int main(int argc, char **argv) {
   ros::init(argc, argv, "bagger");
   Bagger bg;
-  ros::spin();
+  ros::Rate r(20);
+  while (ros::ok()) {
+    ros::spinOnce();
+    // clean up any child records that have completed
+    bg.attemptRecordCleanup();
+    r.sleep();
+  }
 }
