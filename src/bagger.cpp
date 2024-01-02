@@ -144,7 +144,7 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
           // parent process - successful fork
           profile_name_to_record_process_map_[request.bag_profile_name].setRecordPID(pid_rr);
           profile_name_to_record_process_map_[request.bag_profile_name].setRecording(true);
-          ROS_INFO("successfully started the record.  profile: %s", request.bag_profile_name.c_str());
+          ROS_DEBUG("successfully started the record.  profile: %s", request.bag_profile_name.c_str());
           success = true;
 
           // updateBagNames();
@@ -156,14 +156,14 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
 
       } else {
         // already recording, - false
-        ROS_WARN("record profile %s already recording", request.bag_profile_name.c_str());
+        ROS_DEBUG("record profile %s already recording", request.bag_profile_name.c_str());
       }
     } else {
       // request to stop the record
       // make sure the requested record is recording
       if (profile_name_to_record_process_map_[request.bag_profile_name].getRecording()) {
         if (kill(profile_name_to_record_process_map_[request.bag_profile_name].getRecordPID(), SIGINT) == 0) {
-          ROS_INFO("successfully stopped the record.  profile: %s", request.bag_profile_name.c_str());
+          ROS_DEBUG("successfully stopped the record.  profile: %s", request.bag_profile_name.c_str());
           profile_name_to_record_process_map_[request.bag_profile_name].setRecording(false);
           success = true;
         } else {
@@ -171,7 +171,7 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
         }
       } else {
         // not recording, don't need to stop
-        ROS_WARN("record profile %s already not recording", request.bag_profile_name.c_str());
+        ROS_DEBUG("record profile %s already not recording", request.bag_profile_name.c_str());
       }
     }
   } else {
