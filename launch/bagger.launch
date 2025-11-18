@@ -7,6 +7,6 @@
   </node>
   <node name="set_bagger_log_level"
     pkg="rosservice" type="rosservice"
-    args='call --wait bagger/set_logger_level "{logger: \"rosout\", level: \"debug\"}"'
+    args='call --wait bagger/set_logger_level "{logger: \"ros.bagger\", level: \"debug\"}"'
     if="$(arg debug_logging)" />
 </launch>
