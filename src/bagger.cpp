@@ -109,12 +109,31 @@ void RecordProcess::setRecordOptionString(std::string record_options) {
 bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBagState::Response &response) {
   bool success = false;
 
+  // log request intent and prior state if known
+  bool prior_recording = false;
+  pid_t prior_pid = 0;
+  auto prior_it = profile_name_to_record_process_map_.find(request.bag_profile_name);
+  if (prior_it != profile_name_to_record_process_map_.end()) {
+    prior_recording = prior_it->second.getRecording();
+    prior_pid = prior_it->second.getRecordPID();
+  }
+  ROS_DEBUG_STREAM("set_bag_state request: profile='" << request.bag_profile_name
+                   << "' desired=" << (request.set ? "start" : "stop")
+                   << " prior_recording=" << (prior_recording ? "true" : "false")
+                   << " prior_pid=" << prior_pid);
+
   // double check that there is an entry for the specified profile in the profile name to options string map
   if (profile_name_to_record_options_map_.find(request.bag_profile_name) != profile_name_to_record_options_map_.end()) {
     // if trying to start a record, make sure that a bag isn't currently being recorded for the specified profile
     if (request.set) {  // request to start the bag
       if (!profile_name_to_record_process_map_[request.bag_profile_name].getRecording()) {
         // Start recording
+
+        // log options and cwd before fork
+        ROS_DEBUG_STREAM("start: profile='" << request.bag_profile_name << "' opts=\""
+                         << profile_name_to_record_options_map_[request.bag_profile_name]
+                         << "\" cwd='" << getCurrentWorkingDirectory() << "'");
+
         pid_t pid_rr = fork();
         if (pid_rr == 0) {
           // Child process - successful fork - pass the vector's internal array to execvp
@@ -129,6 +148,16 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
           // add null to end (execvp expects null as last element)
           commands.push_back(NULL);
 
+          // log argv we are about to exec
+          std::string cmd_line;
+          for (auto it = command_strings.begin(); it != command_strings.end(); ++it) {
+            if (it != command_strings.begin()) {
+              cmd_line += " ";
+            }
+            cmd_line += *it;
+          }
+          ROS_DEBUG_STREAM("exec: argv=" << cmd_line);
+
           // redirect console output to /dev/null
           int dev_null_fd = open("/dev/null", O_WRONLY);
           // suppress console output from the rosbag record subprocess
@@ -138,20 +167,20 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
 
           if (execvp(commands[0], &commands[0]) != 0) {
             // just ros error about it, its the child process, so we shouldn't interact with any service / message
-            ROS_ERROR("execvp failed! %s", strerror(errno));
+            ROS_ERROR_STREAM("execvp failed: errno=" << errno);
           }
         } else if (pid_rr > 0) {
           // parent process - successful fork
           profile_name_to_record_process_map_[request.bag_profile_name].setRecordPID(pid_rr);
           profile_name_to_record_process_map_[request.bag_profile_name].setRecording(true);
-          ROS_DEBUG("successfully started the record.  profile: %s", request.bag_profile_name.c_str());
+          ROS_DEBUG_STREAM("start: profile='" << request.bag_profile_name << "' pid=" << pid_rr);
           success = true;
 
           // updateBagNames();
 
         } else {
           // fork failed!
-          ROS_ERROR("fork() failed\n");
+          ROS_ERROR_STREAM("fork failed: errno=" << errno);
         }
 
       } else {
@@ -162,12 +191,14 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
       // request to stop the record
       // make sure the requested record is recording
       if (profile_name_to_record_process_map_[request.bag_profile_name].getRecording()) {
-        if (kill(profile_name_to_record_process_map_[request.bag_profile_name].getRecordPID(), SIGINT) == 0) {
-          ROS_DEBUG("successfully stopped the record.  profile: %s", request.bag_profile_name.c_str());
+        pid_t stop_pid = profile_name_to_record_process_map_[request.bag_profile_name].getRecordPID();
+        if (kill(stop_pid, SIGINT) == 0) {
+          ROS_DEBUG_STREAM("stop: profile='" << request.bag_profile_name << "' pid=" << stop_pid << " sent SIGINT");
           profile_name_to_record_process_map_[request.bag_profile_name].setRecording(false);
           success = true;
         } else {
-          ROS_ERROR("kill() when stopping record profile %s failed", request.bag_profile_name.c_str());
+          ROS_ERROR_STREAM("stop: kill failed for profile='" << request.bag_profile_name
+                           << "' pid=" << stop_pid << " errno=" << errno);
         }
       } else {
         // not recording, don't need to stop
@@ -182,6 +213,8 @@ bool Bagger::onBagStateSrv(bagger::SetBagState::Request &request, bagger::SetBag
   }
 
   response.success = success;
+
+  ROS_DEBUG("publishing bag_states after service");
 
   // Publish the current states
   publishBaggingStates();
@@ -204,9 +237,21 @@ void Bagger::publishBaggingStates() {
 
     if (it->second.getRecording()) {
       // Get the record options for the profile name
-      bs_msg.bag_file_names.push_back(getBagNameFromRecordOptions(profile_name_to_record_options_map_[it->first]));
+      std::string resolved = getBagNameFromRecordOptions(profile_name_to_record_options_map_[it->first]);
+      bs_msg.bag_file_names.push_back(resolved);
+
+      // log resolved file and existence at publish time
+      try {
+        bool exists_now = (!resolved.empty() && boost::filesystem::exists(resolved));
+        ROS_DEBUG_STREAM("bag_states: profile='" << it->first
+                         << "' recording=true file='" << resolved
+                         << "' exists_now=" << (exists_now ? "1" : "0"));
+      } catch (...) {
+        // ignore any filesystem exceptions in debug logging
+      }
     } else {
       bs_msg.bag_file_names.push_back("");
+      ROS_DEBUG_STREAM("bag_states: profile='" << it->first << "' recording=false");
     }
   }
   bagging_state_publisher_.publish(bs_msg);
@@ -237,6 +282,10 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
     std::vector<boost::filesystem::path> matches =
         getMatchingFilePathsInDirectory(full_file_name.parent_path(), full_file_name.stem().string());
 
+    ROS_DEBUG_STREAM("resolve -o: dir='" << full_file_name.parent_path().string()
+                     << "' prefix='" << full_file_name.stem().string()
+                     << "' matches=" << matches.size());
+
     if (matches.size() > 0) {
       boost::filesystem::path latest = matches[0];
       for (auto i : matches) {
@@ -252,6 +301,7 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
         }
       }
       bag_name = latest.string();
+      ROS_DEBUG_STREAM("resolve -o: result='" << bag_name << "'");
     }
   } else if (record_opts.find("-O") != std::string::npos) {
     // The -O argument means that the bag's name is specified.  If the passed name does not end in .bag, .bag is
@@ -273,6 +323,7 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
       file_path = cwd_string + file_path;
     }
     bag_name = file_path;
+    ROS_DEBUG_STREAM("resolve -O: result='" << bag_name << "'");
 
   } else {
     // if nothing is passed, a dated rosbag will be created in the cwd. Find the most recent rosbag in the cwd without a
@@ -303,6 +354,7 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
       }
 
       bag_name = latest.string();
+      ROS_DEBUG_STREAM("resolve default: result='" << bag_name << "'");
     }
   }
 
@@ -315,6 +367,7 @@ std::string Bagger::getBagNameFromRecordOptions(std::string record_opts) {
   }
 
   bag_name = removeSuffix(bag_name, ".active");
+  ROS_DEBUG_STREAM("resolve final: '" << bag_name << "' from opts='" << record_opts << "'");
   return removeSuffix(bag_name, ".bag");
 }
 
@@ -328,6 +381,8 @@ std::vector<boost::filesystem::path> Bagger::getMatchingFilePathsInDirectory(con
       }
     }
   }
+  ROS_DEBUG_STREAM("dir scan: '" << dir_path.string() << "' match='" << match_string
+                   << "' count=" << paths.size());
   return paths;
 }
 
@@ -351,6 +406,21 @@ void Bagger::attemptRecordCleanup() {
     int status;
     pid_t wait_result = waitpid(pn_pair.second.getRecordPID(), &status, WNOHANG);
     if (wait_result > 0) {
+      // log exit details
+      if (WIFEXITED(status)) {
+        ROS_DEBUG_STREAM("Record exit: profile " << pn_pair.first
+                         << " pid " << pn_pair.second.getRecordPID()
+                         << " code " << WEXITSTATUS(status));
+      } else if (WIFSIGNALED(status)) {
+        ROS_DEBUG_STREAM("Record exit: profile " << pn_pair.first
+                         << " pid " << pn_pair.second.getRecordPID()
+                         << " signal " << WTERMSIG(status));
+      } else {
+        ROS_DEBUG_STREAM("Record exit: profile " << pn_pair.first
+                         << " pid " << pn_pair.second.getRecordPID()
+                         << " state change");
+      }
+
       ROS_DEBUG_STREAM("Record for profile " << pn_pair.first << " has completed");
       // In case the record process died without bagger killing it, ensure that bagger updates properly
       pn_pair.second.setRecording(false);
@@ -382,6 +452,12 @@ Bagger::Bagger() {
   for (auto it = profile_name_to_record_options_map_.begin(); it != profile_name_to_record_options_map_.end(); ++it) {
     RecordProcess rp(it->first, it->second);
     profile_name_to_record_process_map_[it->first] = rp;
+  }
+
+  // log profiles and options loaded at startup
+  ROS_DEBUG_STREAM("startup: loaded " << profile_name_to_record_options_map_.size() << " profile(s)");
+  for (auto it = profile_name_to_record_options_map_.begin(); it != profile_name_to_record_options_map_.end(); ++it) {
+    ROS_DEBUG_STREAM("startup: profile='" << it->first << "' opts=\"" << it->second << "\"");
   }
 
   publishBaggingStates();

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
-  <node name="bagger" pkg="bagger" type="bagger" output="screen" respawn="true">
-    <rosparam command="load" file="$(find bagger)/config/example_profiles.yaml" />
+  <arg name="bagger_config" default="$(find bagger)/config/example_profiles.yaml" />
+  <arg name="debug_logging" default="false" />
+  <node name="bagger" pkg="bagger" type="bagger" respawn="true">
+    <rosparam command="load" file="$(arg bagger_config)" />
   </node>
+  <node name="set_bagger_log_level"
+    pkg="rosservice" type="rosservice"
+    args='call --wait bagger/set_logger_level "{logger: \"rosout\", level: \"debug\"}"'
+    if="$(arg debug_logging)" />
 </launch>
